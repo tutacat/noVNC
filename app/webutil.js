@@ -6,16 +6,16 @@
  * See README.md for usage and integration instructions.
  */
 
-import { initLogging as mainInitLogging } from '../core/util/logging.js';
+import * as Log from '../core/util/logging.js';
 
 // init log level reading the logging HTTP param
 export function initLogging(level) {
     "use strict";
     if (typeof level !== "undefined") {
-        mainInitLogging(level);
+        Log.initLogging(level);
     } else {
         const param = document.location.href.match(/logging=([A-Za-z0-9._-]*)/);
-        mainInitLogging(param || undefined);
+        Log.initLogging(param || undefined);
     }
 }
 
@@ -146,7 +146,7 @@ export function writeSetting(name, value) {
     if (window.chrome && window.chrome.storage) {
         window.chrome.storage.sync.set(settings);
     } else {
-        localStorage.setItem(name, value);
+        localStorageWrapper("setItem", [name, value]);
     }
 }
 
@@ -156,7 +156,7 @@ export function readSetting(name, defaultValue) {
     if ((name in settings) || (window.chrome && window.chrome.storage)) {
         value = settings[name];
     } else {
-        value = localStorage.getItem(name);
+        value = localStorageWrapper("getItem", [name]);
         settings[name] = value;
     }
     if (typeof value === "undefined") {
@@ -181,6 +181,26 @@ export function eraseSetting(name) {
     if (window.chrome && window.chrome.storage) {
         window.chrome.storage.sync.remove(name);
     } else {
-        localStorage.removeItem(name);
+        localStorageWrapper("removeItem", [name]);
     }
+}
+
+let localStorageWarned = false;
+
+function localStorageWrapper(func, args) {
+    let r;
+    try {
+        r = localStorage[func](...args);
+    } catch (e) {
+        if (e instanceof DOMException) {
+            if (!localStorageWarned) {
+                Log.Warn("Couldn't access noVNC settings, are cookies disabled?");
+                localStorageWarned = true;
+            }
+            Log.Debug("'localStorage." + func + "(" + args.join(",") + ")' failed: " + e);
+        } else {
+            throw e;
+        }
+    }
+    return r;
 }
